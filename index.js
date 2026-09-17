@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, REST, Routes, SlashCommandBuilder, AttachmentBuilder } = require('discord.js')
+const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, REST, Routes, SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require('discord.js')
 
 const TOKEN = process.env.TOKEN
 const CLIENT_ID = process.env.CLIENT_ID
@@ -82,7 +82,7 @@ client.on('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
 
-  // SETUP
+  // SETUP — poste le message dans entra-na-liga
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-fantasy') {
     const isAdmin = interaction.member.permissions.has('Administrator')
     if (!isAdmin) return interaction.reply({ content: 'Permissão negada.', ephemeral: true })
@@ -97,17 +97,24 @@ client.on('interactionCreate', async interaction => {
     )
 
     await channel.send({
-      content:
-        '**Regista o teu nome Fantasy Liga Portugal aqui 👇**\n\n' +
-        'Clica no botão abaixo e introduz o teu nome para seres identificado nos classificações todas as semanas e receberes as tuas recompensas em Freebets.\n\n' +
-        '⚠️ Certifica-te de que o teu nome é exatamente igual ao da plataforma Fantasy.',
+      embeds: [new EmbedBuilder()
+        .setTitle('🎮 Liga o teu nome Fantasy Liga Portugal')
+        .setDescription(
+          'Liga o teu nome Fantasy à tua conta Discord para seres identificado nos classificações todas as semanas e receberes as tuas recompensas em Freebets !\n\n' +
+          '**Como funciona :**\n' +
+          '① Clica no botão abaixo\n' +
+          '② Introduz o teu nome Fantasy Liga Portugal\n' +
+          '③ Já está, estás inscrito !\n\n' +
+          '*Podes atualizar o teu nome a qualquer momento clicando novamente.*'
+        )
+        .setColor('#E8192C')],
       components: [row]
     })
 
-    await interaction.reply({ content: 'Mensagem publicada !', ephemeral: true })
+    await interaction.reply({ content: 'Mensagem publicada em entra-na-liga !', ephemeral: true })
   }
 
-  // BOTÃO REGISTO
+  // BOUTON
   if (interaction.isButton() && interaction.customId === 'register_fantasy') {
     const modal = new ModalBuilder()
       .setCustomId('fantasy_modal')
@@ -119,6 +126,8 @@ client.on('interactionCreate', async interaction => {
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Ex: CristianoFan99')
       .setRequired(true)
+      .setMinLength(2)
+      .setMaxLength(50)
 
     modal.addComponents(new ActionRowBuilder().addComponents(input))
     await interaction.showModal(modal)
@@ -126,33 +135,38 @@ client.on('interactionCreate', async interaction => {
 
   // MODAL SUBMIT
   if (interaction.isModalSubmit() && interaction.customId === 'fantasy_modal') {
-    const fantasyUsername = interaction.fields.getTextInputValue('fantasy_pseudo').trim()
-    const discordId = interaction.user.id
-    const discordUsername = interaction.user.username
+    await interaction.deferReply({ ephemeral: true })
 
-    const existing = registrations.get(discordId)
+    try {
+      const fantasyUsername = interaction.fields.getTextInputValue('fantasy_pseudo').trim()
+      const discordId = interaction.user.id
+      const discordUsername = interaction.user.username
+      const existing = registrations.get(discordId)
 
-    registrations.set(discordId, {
-      discordUsername,
-      fantasyUsername,
-      registeredAt: new Date().toISOString()
-    })
+      registrations.set(discordId, {
+        discordUsername,
+        fantasyUsername,
+        registeredAt: new Date().toISOString()
+      })
 
-    await saveData()
+      await saveData()
 
-    const staffChannel = await client.channels.fetch(STAFF_CHANNEL_ID)
-    if (existing) {
-      await staffChannel.send(`🔄 **${discordUsername}** (<@${discordId}>) atualizou o seu nome Fantasy : **${existing.fantasyUsername}** → **${fantasyUsername}**`)
-    } else {
-      await staffChannel.send(`✅ **${discordUsername}** (<@${discordId}>) registou-se com o nome Fantasy : **${fantasyUsername}**`)
+      const staffChannel = await client.channels.fetch(STAFF_CHANNEL_ID)
+      if (existing) {
+        await staffChannel.send(`🔄 **${discordUsername}** (<@${discordId}>) atualizou o seu nome Fantasy : **${existing.fantasyUsername}** → **${fantasyUsername}**`)
+      } else {
+        await staffChannel.send(`✅ **${discordUsername}** (<@${discordId}>) registou-se com o nome Fantasy : **${fantasyUsername}**`)
+      }
+
+      await interaction.editReply({
+        content: existing
+          ? `✅ O teu nome foi atualizado : **${fantasyUsername}**`
+          : `✅ Registo efetuado com sucesso ! O teu nome Fantasy **${fantasyUsername}** está registado. Boa sorte 🍀`
+      })
+    } catch (e) {
+      console.error('Erro modal:', e.message)
+      await interaction.editReply({ content: 'Ocorreu um erro. Tenta novamente.' })
     }
-
-    await interaction.reply({
-      content: existing
-        ? `✅ O teu nome foi atualizado : **${fantasyUsername}**`
-        : `✅ Registo efetuado com sucesso ! O teu nome Fantasy **${fantasyUsername}** está registado. Boa sorte 🍀`,
-      ephemeral: true
-    })
   }
 
   // LOOKUP
